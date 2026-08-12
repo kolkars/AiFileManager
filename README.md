@@ -1,8 +1,8 @@
-# AI File Manager — Milestone 2
+# AI File Manager — Milestone 3
 
-A local-first, domain-agnostic file index. Every first-level folder inside `knowledge/` is discovered as a domain at runtime. Adding a domain requires only creating its folder and adding supported files; no source-code or configuration change is needed.
+A local-first, domain-agnostic file index. On Windows, every first-level folder inside `D:\domains` is discovered as a domain at runtime. Adding a domain requires only creating its folder and adding supported files; no source-code or configuration change is needed.
 
-Milestone 2 production-ingestion capabilities are also available. See [Architecture](docs/ARCHITECTURE.md) and [Milestones](docs/MILESTONES.md).
+Milestone 2 production ingestion and Milestone 3 rich extraction are available. See [Architecture](docs/ARCHITECTURE.md) and [Milestones](docs/MILESTONES.md).
 
 Milestone 1 supports PDF, TXT, Markdown, CSV, XLSX, and DOCX. It stores metadata and extracted text locally in SQLite, detects new/changed/unchanged/deleted files, and provides SQLite FTS5 keyword search. It does not include embeddings, Ollama, MCP, or domain-specific behavior. Source files are opened read-only and are never modified.
 
@@ -21,14 +21,20 @@ Milestone 1 supports PDF, TXT, Markdown, CSV, XLSX, and DOCX. It stores metadata
    uv sync --dev
    ```
 
-4. Create any domains and add files:
+4. Create the external root and any domains, then add files:
 
    ```powershell
-   New-Item -ItemType Directory -Force knowledge\Investments
-   Set-Content knowledge\Investments\notes.txt "local-first research"
+   New-Item -ItemType Directory -Force D:\domains\Investments
+   Set-Content D:\domains\Investments\notes.txt "local-first research"
    ```
 
-The local index is written to `.ai-file-manager/index.db` and can be deleted and rebuilt from the original files at any time.
+The source root can be overridden before running commands:
+
+```powershell
+$env:AI_FILE_MANAGER_DOMAINS_ROOT = "E:\my-domains"
+```
+
+The local index is written to `.ai-file-manager/index.db` in the repository and can be deleted and rebuilt from the original files at any time.
 
 ## CLI
 
@@ -39,7 +45,9 @@ uv run ai-files scan
 uv run ai-files domains
 uv run ai-files files Investments
 uv run ai-files show 1
+uv run ai-files units 1
 uv run ai-files search Investments "local-first"
+uv run ai-files search Investments "local-first" --extension pdf
 uv run ai-files health
 uv run ai-files watch
 uv run ai-files schedule --interval 3600
@@ -68,3 +76,14 @@ uv run pytest
 - `ingestion.py` owns idempotent reconciliation but has no format or domain logic.
 - `repository.py` isolates SQLAlchemy persistence and SQLite FTS5 synchronization.
 - Deleted source records are retained as tombstones, excluded from listing/search, and revived with the same ID if the path returns.
+
+## Migrating from the Milestone 1/2 source folder
+
+If an earlier checkout contains `knowledge/`, migrate its domain folders before the first Milestone 3 scan:
+
+```powershell
+New-Item -ItemType Directory -Force D:\domains
+Move-Item .\knowledge\* D:\domains\
+```
+
+Review the destination before removing the empty `knowledge` directory. The application never moves or modifies source files itself. To use another location, set `AI_FILE_MANAGER_DOMAINS_ROOT` before running the CLI.

@@ -66,3 +66,23 @@ class ExtractionAttempt(Base):
     attempted_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     succeeded: Mapped[bool] = mapped_column(Boolean)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DocumentUnit(Base):
+    __tablename__ = "document_units"
+    __table_args__ = (UniqueConstraint("document_id", "ordinal"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), index=True)
+    kind: Mapped[str] = mapped_column(String, index=True)
+    ordinal: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text)
+    location: Mapped[str] = mapped_column(String)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class DocumentExtraction(Base):
+    __tablename__ = "document_extractions"
+
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), primary_key=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")

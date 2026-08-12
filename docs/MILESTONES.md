@@ -6,13 +6,13 @@ The invariant across all milestones is: **folder names define domains, files are
 
 Discover domains/files; extract PDF, TXT, Markdown, CSV, XLSX, and DOCX; calculate checksums; persist metadata/text in SQLite; reconcile new, changed, unchanged, and deleted files; provide an idempotent CLI and FTS5 search.
 
-## M2 — Production-grade ingestion
+## M2 — Production-grade ingestion (complete)
 
 Automate ingestion with filesystem watching and scheduled scans; add extraction retries, stable-file safeguards, scan history, immutable document versions, structured logs, and health reporting. Keep document-level failures isolated.
 
-## M3 — Rich document processing
+## M3 — Rich document processing (complete)
 
-Preserve headings, pages, sheets, tables, and source locations; support optional OCR; normalize extraction; expand parser plugins and metadata filters.
+Use the external configurable `domains` root; preserve Markdown headings, PDF pages, DOCX paragraphs/tables, XLSX sheets/rows, CSV rows, and source locations; normalize extraction; provide an optional OCR interface and rich-unit inspection.
 
 ## M4 — Semantic search
 

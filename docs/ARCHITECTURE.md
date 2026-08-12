@@ -4,11 +4,12 @@ This diagram distinguishes implemented components from future milestones. The co
 
 ```mermaid
 flowchart LR
-    F["knowledge/<any-folder>/**"] --> D["Generic discovery"]
+    F["D:/domains/<any-folder>/**"] --> D["Generic discovery"]
     D --> W["Manual scan / watcher / scheduler"]
     W --> H["Stable-file check + SHA-256"]
     H --> E["Replaceable extractor registry"]
-    E --> I["Idempotent ingestion service"]
+    E --> U["Normalized rich units: pages / headings / tables / rows"]
+    U --> I["Idempotent ingestion service"]
     I --> M[("SQLite metadata")]
     I --> T[("Extracted document text")]
     I --> V[("Document versions + scan history")]
@@ -23,7 +24,7 @@ flowchart LR
     R -. "future" .-> A["REST / MCP / Web / agents"]
 ```
 
-## Milestone 2 component boundaries
+## Milestone 3 component boundaries
 
 - Files remain authoritative and are never modified.
 - Discovery derives domains only from folders; there is no domain registry.
@@ -33,4 +34,6 @@ flowchart LR
 - Extraction attempts and scan summaries provide an operational audit trail.
 - Files that change during processing are deferred until a later scan.
 - FTS5 is rebuildable from stored document text.
-
+- The source root defaults to `D:\domains` on Windows and can be overridden with `AI_FILE_MANAGER_DOMAINS_ROOT`.
+- Rich units retain generic source locations and metadata without interpreting domain meaning.
+- OCR is represented by an optional provider interface; no OCR engine is required by the core.

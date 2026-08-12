@@ -3,13 +3,14 @@ from typing import Annotated
 import json
 
 import typer
+from sqlalchemy import select
 
 from .config import Settings
 from .database import create_database
 from .discovery import discover_domains
 from .extractors import default_registry
 from .ingestion import IngestionService
-from .models import Document
+from .models import Document, DocumentUnit
 from .monitoring import schedule as run_schedule, watch as run_watch
 from .observability import configure_logging, health_report, log_scan
 from .repository import DocumentRepository
@@ -19,6 +20,7 @@ app = typer.Typer(no_args_is_help=True, help="Index and search local knowledge f
 
 def context() -> tuple[Settings, object]:
     settings = Settings.from_cwd()
+    settings.knowledge_root.mkdir(parents=True, exist_ok=True)
     _engine, sessions = create_database(settings.database_path)
     return settings, sessions
 
@@ -83,11 +85,32 @@ def show(file_id: int) -> None:
 
 
 @app.command()
-def search(domain: str, query: Annotated[str, typer.Argument(help="FTS5 query text")]) -> None:
+def units(file_id: int) -> None:
+    """List source-addressable extracted units for a document."""
+    _settings, sessions = context()
+    with sessions() as session:
+        document = session.get(Document, file_id)
+        if document is None or document.is_deleted:
+            raise typer.BadParameter(f"No active file with id {file_id}")
+        values = session.scalars(
+            select(DocumentUnit).where(DocumentUnit.document_id == file_id).order_by(DocumentUnit.ordinal)
+        )
+        for unit in values:
+            preview = " ".join(unit.text.split())[:100]
+            typer.echo(f"{unit.ordinal}\t{unit.kind}\t{unit.location}\t{preview}")
+
+
+@app.command()
+def search(
+    domain: str,
+    query: Annotated[str, typer.Argument(help="Literal keyword or phrase")],
+    extension: Annotated[str | None, typer.Option(help="Filter by extension, for example .pdf")] = None,
+) -> None:
     _settings, sessions = context()
     with sessions() as session:
         try:
-            matches = DocumentRepository(session).search(domain, query)
+            normalized_extension = None if extension is None else (extension if extension.startswith(".") else f".{extension}")
+            matches = DocumentRepository(session).search(domain, query, normalized_extension)
         except Exception as error:
             raise typer.BadParameter(f"Invalid search query: {error}") from error
         for document in matches:

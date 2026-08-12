@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from .discovery import discover_files
 from .extractors import ExtractorRegistry
+from .extractors.base import ContentUnit
 from .hashing import sha256_file
 from .models import Document, ExtractionAttempt, ScanRun
 from .repository import DocumentRepository
@@ -28,16 +29,16 @@ class IngestionService:
         self.extractors = extractors
         self.extraction_retries = max(0, extraction_retries)
 
-    def _extract(self, session, scan_run: ScanRun, found) -> tuple[str, str | None]:
+    def _extract(self, session, scan_run: ScanRun, found) -> tuple[str, tuple[ContentUnit, ...], dict[str, object], str | None]:
         for attempt_number in range(1, self.extraction_retries + 2):
             try:
-                value = self.extractors.extract(found.path)
+                extracted = self.extractors.extract_rich(found.path)
                 session.add(ExtractionAttempt(scan_run_id=scan_run.id, domain=found.domain, relative_path=found.relative_path, attempt_number=attempt_number, attempted_time=datetime.now(timezone.utc), succeeded=True))
-                return value, None
+                return extracted.text, extracted.units, extracted.metadata, None
             except Exception as error:  # retry locally, then isolate the failed source
                 message = f"{type(error).__name__}: {error}"
                 session.add(ExtractionAttempt(scan_run_id=scan_run.id, domain=found.domain, relative_path=found.relative_path, attempt_number=attempt_number, attempted_time=datetime.now(timezone.utc), succeeded=False, error=message))
-        return "", message
+        return "", (), {}, message
 
     def scan(self) -> ScanResult:
         result = ScanResult()
@@ -60,7 +61,7 @@ class IngestionService:
                 if existing is not None and not existing.is_deleted and existing.checksum == checksum:
                     result.unchanged += 1
                     continue
-                extracted_text, extraction_error = self._extract(session, scan_run, found)
+                extracted_text, content_units, extraction_metadata, extraction_error = self._extract(session, scan_run, found)
                 try:
                     after = found.path.stat()
                 except OSError:
@@ -87,6 +88,8 @@ class IngestionService:
                 if existing is None:
                     session.add(document)
                 repository.sync_fts(document)
+                repository.replace_units(document, content_units)
+                repository.replace_extraction_metadata(document, extraction_metadata)
                 repository.record_version(document)
                 if was_existing:
                     result.changed += 1
