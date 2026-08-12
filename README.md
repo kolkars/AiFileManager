@@ -1,6 +1,8 @@
-# AI File Manager — Milestone 1
+# AI File Manager — Milestone 2
 
 A local-first, domain-agnostic file index. Every first-level folder inside `knowledge/` is discovered as a domain at runtime. Adding a domain requires only creating its folder and adding supported files; no source-code or configuration change is needed.
+
+Milestone 2 production-ingestion capabilities are also available. See [Architecture](docs/ARCHITECTURE.md) and [Milestones](docs/MILESTONES.md).
 
 Milestone 1 supports PDF, TXT, Markdown, CSV, XLSX, and DOCX. It stores metadata and extracted text locally in SQLite, detects new/changed/unchanged/deleted files, and provides SQLite FTS5 keyword search. It does not include embeddings, Ollama, MCP, or domain-specific behavior. Source files are opened read-only and are never modified.
 
@@ -38,11 +40,20 @@ uv run ai-files domains
 uv run ai-files files Investments
 uv run ai-files show 1
 uv run ai-files search Investments "local-first"
+uv run ai-files health
+uv run ai-files watch
+uv run ai-files schedule --interval 3600
 ```
 
 `scan` reports counts for `new`, `changed`, `unchanged`, `deleted`, and extraction `errors`. An extraction error is recorded on that document while the rest of the scan continues.
 
-FTS5 accepts SQLite FTS query syntax. For literal punctuation-heavy text, quote or simplify the query.
+`watch` performs an initial scan and then debounces filesystem events. `schedule` runs scans at a fixed interval. Both stop cleanly with Ctrl+C. Files that change while being read are deferred to the next scan, and extraction failures are retried once by default (`--retries` controls this).
+
+Scan summaries, extraction attempts, and content versions are retained in SQLite. `health` reports the latest scan and active extraction-error count as JSON. Operational scan completion logs are emitted as structured JSON.
+
+Back up both `knowledge/` and `.ai-file-manager/index.db` together when a point-in-time operational snapshot is required. The database is derived state and can always be rebuilt with `scan`; the original files remain authoritative.
+
+Search input is treated as literal text, so punctuation such as hyphens does not require SQLite FTS5 escaping.
 
 ## Tests
 
@@ -57,4 +68,3 @@ uv run pytest
 - `ingestion.py` owns idempotent reconciliation but has no format or domain logic.
 - `repository.py` isolates SQLAlchemy persistence and SQLite FTS5 synchronization.
 - Deleted source records are retained as tombstones, excluded from listing/search, and revived with the same ID if the path returns.
-

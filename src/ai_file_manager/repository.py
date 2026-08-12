@@ -1,7 +1,7 @@
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from .models import Document
+from .models import Document, DocumentVersion
 
 
 class DocumentRepository:
@@ -29,10 +29,38 @@ class DocumentRepository:
                 {"id": document.id, "domain": document.domain, "content": document.text},
             )
 
+    def record_version(self, document: Document) -> None:
+        self.session.flush()
+        exists = self.session.scalar(
+            select(DocumentVersion.id).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.checksum == document.checksum,
+            )
+        )
+        if exists is None:
+            self.session.add(
+                DocumentVersion(
+                    document_id=document.id,
+                    checksum=document.checksum,
+                    size=document.size,
+                    modified_time=document.modified_time,
+                    indexed_time=document.indexed_time,
+                    text=document.text,
+                    extraction_error=document.extraction_error,
+                )
+            )
+
     def search(self, domain: str, query: str) -> list[Document]:
+        # Search accepts ordinary user text rather than raw FTS5 syntax.
+        normalized = query.strip()
+        while len(normalized) >= 2 and normalized.startswith('"') and normalized.endswith('"'):
+            normalized = normalized[1:-1].strip()
+        if not normalized:
+            return []
+        fts_query = f'"{normalized.replace(chr(34), chr(34) * 2)}"'
         ids = self.session.execute(
             text("SELECT document_id FROM documents_fts WHERE domain = :domain AND documents_fts MATCH :query ORDER BY rank"),
-            {"domain": domain, "query": query},
+            {"domain": domain, "query": fts_query},
         ).scalars()
         result: list[Document] = []
         for document_id in ids:

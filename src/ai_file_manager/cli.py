@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Annotated
+import json
 
 import typer
 
@@ -9,6 +10,8 @@ from .discovery import discover_domains
 from .extractors import default_registry
 from .ingestion import IngestionService
 from .models import Document
+from .monitoring import schedule as run_schedule, watch as run_watch
+from .observability import configure_logging, health_report, log_scan
 from .repository import DocumentRepository
 
 app = typer.Typer(no_args_is_help=True, help="Index and search local knowledge files.")
@@ -20,11 +23,37 @@ def context() -> tuple[Settings, object]:
     return settings, sessions
 
 
-@app.command()
-def scan() -> None:
+def execute_scan(retries: int = 1) -> None:
     settings, sessions = context()
-    result = IngestionService(settings.knowledge_root, sessions, default_registry()).scan()
-    typer.echo(f"new={result.new} changed={result.changed} unchanged={result.unchanged} deleted={result.deleted} errors={result.errors}")
+    result = IngestionService(settings.knowledge_root, sessions, default_registry(), retries).scan()
+    log_scan(result)
+    typer.echo(f"new={result.new} changed={result.changed} unchanged={result.unchanged} deleted={result.deleted} errors={result.errors} deferred={result.deferred}")
+
+
+@app.command()
+def scan(retries: Annotated[int, typer.Option(min=0, help="Retries after an extraction failure.")] = 1) -> None:
+    configure_logging()
+    execute_scan(retries)
+
+
+@app.command()
+def watch(debounce: Annotated[float, typer.Option(min=0.1, help="Quiet period before scanning.")] = 1.0, retries: Annotated[int, typer.Option(min=0)] = 1) -> None:
+    configure_logging()
+    settings, _sessions = context()
+    execute_scan(retries)
+    run_watch(settings.knowledge_root, lambda: execute_scan(retries), debounce)
+
+
+@app.command()
+def schedule(interval: Annotated[float, typer.Option(min=1.0, help="Seconds between scans.")] = 3600, retries: Annotated[int, typer.Option(min=0)] = 1) -> None:
+    configure_logging()
+    run_schedule(lambda: execute_scan(retries), interval)
+
+
+@app.command()
+def health() -> None:
+    settings, sessions = context()
+    typer.echo(json.dumps(health_report(settings.knowledge_root, sessions), indent=2))
 
 
 @app.command()

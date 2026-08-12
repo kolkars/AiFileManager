@@ -43,3 +43,14 @@ def test_extraction_error_does_not_stop_other_documents(tmp_path):
         assert len(docs) == 2
         assert next(doc for doc in docs if doc.filename == "bad.pdf").extraction_error
 
+
+def test_search_treats_hyphenated_input_as_literal_text(tmp_path):
+    root, sessions, service = make_service(tmp_path)
+    domain = root / "Investments"
+    domain.mkdir(parents=True)
+    (domain / "notes.txt").write_text("local-first research", encoding="utf-8")
+    service.scan()
+    with sessions() as session:
+        repository = DocumentRepository(session)
+        assert [doc.filename for doc in repository.search("Investments", "local-first")] == ["notes.txt"]
+        assert [doc.filename for doc in repository.search("Investments", '"local-first"')] == ["notes.txt"]
